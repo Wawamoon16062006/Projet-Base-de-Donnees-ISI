@@ -1,6 +1,6 @@
--- =========================================================
+---- ========================================================================
 -- SOLUTION 1 : MODÈLE RELATIONNEL (SGBDR)
--- =========================================================
+-- ========================================================================
 
 CREATE TABLE MEDECIN (
     IdMedecin SERIAL PRIMARY KEY,
@@ -15,8 +15,9 @@ CREATE TABLE PATIENT (
     DatNais DATE NOT NULL,
     Poids DECIMAL(5,2),
     Taille DECIMAL(3,2),
+    NTel VARCHAR(20), -- CORRECTION : Ajout du numéro de téléphone demandé
     Adresse TEXT,
-    IdMedecin_Traitant INT REFERENCES MEDECIN(IdMedecin)
+    IdMedecin_Traitant INT REFERENCES MEDECIN(IdMedecin) ON DELETE SET NULL
 );
 
 CREATE TABLE MALADIE (
@@ -36,16 +37,16 @@ CREATE TABLE VISITE (
     DateVisite TIMESTAMP NOT NULL,
     Motif TEXT,
     Lieu VARCHAR(10) CHECK (Lieu IN ('Cabinet', 'Domicile')),
-    Prescrip BOOLEAN DEFAULT FALSE,
-    Analyses BOOLEAN DEFAULT FALSE,
-    Result BOOLEAN DEFAULT FALSE,
+    Prescrip BOOLEAN DEFAULT FALSE, -- Présent dans l'énoncé
+    Analyses BOOLEAN DEFAULT FALSE, -- Présent dans l'énoncé
+    Result BOOLEAN DEFAULT FALSE,   -- Présent dans l'énoncé
     IdPatient INT REFERENCES PATIENT(IdPatient) ON DELETE CASCADE,
-    IdMedecin INT REFERENCES MEDECIN(IdMedecin)
+    IdMedecin INT REFERENCES MEDECIN(IdMedecin) ON DELETE RESTRICT
 );
 
 CREATE TABLE PRESCRIPTION (
     IdVisite INT REFERENCES VISITE(IdVisite) ON DELETE CASCADE,
-    IdMedoc INT REFERENCES MEDICAMENT(IdMedoc),
+    IdMedoc INT REFERENCES MEDICAMENT(IdMedoc) ON DELETE RESTRICT, -- OPTIMISATION
     NbrPrises INT NOT NULL,
     NbrDoses INT NOT NULL,
     FrequenceJour INT NOT NULL,
@@ -74,18 +75,23 @@ CREATE TABLE SEJOUR_TIERS (
     IdPatient INT REFERENCES PATIENT(IdPatient) ON DELETE CASCADE
 );
 
--- Trigger de sécurité pour les allergies
+-- ========================================================================
+-- TRIGGER DE SÉCURITÉ (ALLERGIES)
+-- ========================================================================
 CREATE OR REPLACE FUNCTION verifier_allergie_prescription() 
 RETURNS TRIGGER AS $$
 DECLARE
     v_id_patient INT;
 BEGIN
+    -- Récupération du patient lié à la visite
     SELECT IdPatient INTO v_id_patient FROM VISITE WHERE IdVisite = NEW.IdVisite;
+    
+    -- Vérification de l'allergie
     IF EXISTS (
         SELECT 1 FROM ALLERGIE 
         WHERE IdPatient = v_id_patient AND IdMedoc = NEW.IdMedoc
     ) THEN
-        RAISE EXCEPTION 'Sécurité : Le patient est allergique à ce médicament !';
+        RAISE EXCEPTION 'Sécurité Médicale : Le patient est allergique à ce médicament !';
     END IF;
     RETURN NEW;
 END;
@@ -96,9 +102,9 @@ BEFORE INSERT OR UPDATE ON PRESCRIPTION
 FOR EACH ROW EXECUTE FUNCTION verifier_allergie_prescription();
 
 
--- =========================================================
+-- ========================================================================
 -- SOLUTION 2 : MODÈLE OBJET-RELATIONNEL (SGBDOR)
--- =========================================================
+-- ========================================================================
 
 CREATE TYPE Sejour_Type AS (
     NomCentre VARCHAR(100),
@@ -114,8 +120,9 @@ CREATE TABLE PATIENT_OR (
     DatNais DATE NOT NULL,
     Poids DECIMAL(5,2),
     Taille DECIMAL(3,2),
+    NTel VARCHAR(20), -- CORRECTION : Ajout également ici
     Adresse TEXT,
-    IdMedecin_Traitant INT REFERENCES MEDECIN(IdMedecin),
+    IdMedecin_Traitant INT REFERENCES MEDECIN(IdMedecin) ON DELETE SET NULL,
     AllergiesMedoc INT[], 
     MaladiesId INT[],     
     HistoriqueSejours Sejour_Type[] 
